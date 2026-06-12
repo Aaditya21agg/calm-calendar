@@ -1,0 +1,50 @@
+model User{
+  id Int @id @default (autoincrement())
+  email String @unique
+  subscriptionStatus String @default("trial")
+  trialEndsAt DateTime
+  createdAt DateTime @default(now())
+
+  googleAccounts GoogleAccount[]
+  workflows Workflow[]
+}
+
+model GoogleAccount {
+  id Int @id @default(autoincrement())
+  email String
+  accessToken String
+  refreshToken String
+  createdAt DateTime @default(now())
+  userId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceWorkflows Workflow[] @relation("SourceGoogleAccount")
+  targetWorkflows Workflow[] @relation("TargetGoogleAccount")
+
+  @@unique([userId, email])
+}
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "sqlite"
+  url = "file:./dev.db"
+  
+}
+model Workflow{
+  id Int  @id @default(autoincrement())
+  name String
+  sourceCal String
+  targetCal String
+  enabled Boolean    @default(true)
+
+  lastSynced DateTime?
+  lastSyncedAt DateTime?
+  userId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceGoogleAccountId Int
+  sourceGoogleAccount GoogleAccount @relation("SourceGoogleAccount", fields: [sourceGoogleAccountId], references: [id])
+
+  targetGoogleAccountId Int
+  targetGoogleAccount GoogleAccount @relation("TargetGoogleAccount", fields: [targetGoogleAccountId], references: [id])
+
+}

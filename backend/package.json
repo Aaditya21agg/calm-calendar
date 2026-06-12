@@ -1,0 +1,22 @@
+{
+  "name": "calm-calendar",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node index.js",
+    "start": "node index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "express-session": "^1.18.2",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}
