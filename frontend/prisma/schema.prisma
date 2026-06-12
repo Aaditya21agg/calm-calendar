@@ -37,6 +37,17 @@ model Workflow{
   targetCal String
   enabled Boolean    @default(true)
 
+  includeTimedEvents Boolean @default(true)
+  includeAllDayEvents Boolean @default(true)
+  includeNonBusyEvents Boolean @default(false)
+  includeTentativeEvents Boolean @default(false)
+  includeFocusTimeEvents Boolean @default(false)
+  includeOutOfOfficeEvents Boolean @default(false)
+
+  removeSummaryLocation Boolean @default(false)
+  replacementSummary String?
+  preserveManualChanges Boolean @default(false)
+
   lastSynced DateTime?
   lastSyncedAt DateTime?
   userId Int

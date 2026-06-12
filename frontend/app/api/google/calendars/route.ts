@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       `Failed to refresh token for account ${account.email}:`,
       error
     );
-  }
+  
 
   
    return Response.json(
@@ -68,3 +68,15 @@ export async function GET(req: Request) {
     {status: 401}
    );
   }}
+  const data = await res.json();
+  if(!res.ok){
+    return Response.json(
+      {
+        error:
+           data?.error?.message || "Failed to fetch calendars",
+      },
+      { status: res.status }
+    );
+      }
+    return Response.json(data.items || []);
+    }

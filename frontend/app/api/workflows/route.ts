@@ -48,7 +48,7 @@ const user = await prisma.user.findUnique({
         return Response.json({ error: "User not found" }, { status: 404 });
     }
     const body = await req.json();
-    const { name, sourceCal, targetCal, sourceGoogleAccountId, targetGoogleAccountId } = body;
+    const { name, sourceCal, targetCal, sourceGoogleAccountId, targetGoogleAccountId, includeTimedEvents, includeAllDayEvents, includeNonBusyEvents, includeTentativeEvents, includeFocusTimeEvents, includeOutOfOfficeEvents, removeSummaryLocation, replacementSummary, preserveManualChanges, } = body;
     if (!sourceCal || !targetCal || !sourceGoogleAccountId || !targetGoogleAccountId) {
         return Response.json({ error: "Missing workflow details" }, { status: 400 });
     }
@@ -67,6 +67,7 @@ const user = await prisma.user.findUnique({
     }
 
     const workflow = await prisma.workflow.create({
+        
         data:  {
             name: name || "Custom Workflow",
             sourceCal,
@@ -75,6 +76,32 @@ const user = await prisma.user.findUnique({
             userId: user.id,
             sourceGoogleAccountId: Number(sourceGoogleAccountId),
             targetGoogleAccountId: Number(targetGoogleAccountId),
+            includeTimedEvents:
+            includeTimedEvents ?? true,
+
+            includeAllDayEvents:
+            includeAllDayEvents ?? true,
+
+            includeNonBusyEvents:
+            includeNonBusyEvents ?? false,
+
+            includeTentativeEvents:
+            includeTentativeEvents ?? false,
+
+            includeFocusTimeEvents:
+            includeFocusTimeEvents ?? false,
+
+            includeOutOfOfficeEvents:
+            includeOutOfOfficeEvents ?? false,
+
+            removeSummaryLocation:
+            removeSummaryLocation ?? false,
+
+            replacementSummary:
+            replacementSummary || null,
+
+            preserveManualChanges:
+            preserveManualChanges ?? false,
         },
     });
     return Response.json(workflow);
@@ -183,6 +210,19 @@ export async function PATCH(req: Request){
             targetGoogleAccountId: body.targetGoogleAccountId
                 ? Number(body.targetGoogleAccountId)
                 : undefined,
+
+            includeTimedEvents: body.includeTimedEvents,
+            includeAllDayEvents: body.includeAllDayEvents,
+            includeNonBusyEvents: body.includeNonBusyEvents,
+            includeTentativeEvents: body.includeTentativeEvents,
+            includeFocusTimeEvents: body.includeFocusTimeEvents,
+            includeOutOfOfficeEvents: body.includeOutOfOfficeEvents,
+
+            removeSummaryLocation: body.removeSummaryLocation,
+            replacementSummary: body.replacementSummary,
+
+            preserveManualChanges: body.preserveManualChanges,
+
         },
 
     });
