@@ -78,6 +78,12 @@ export const googleSync = async ({
   if (!sourceCal || !targetCal) {
     throw new Error("Missing calendars");
   }
+  const workflow = await prisma.workflow.findUnique({
+    where: {id: workflowId },
+  });
+  if (!workflow) {
+    throw new Error("Workflow not found");
+  }
 
   const validSourceAccessToken = await getValidAccessToken(
     sourceGoogleAccountId,
@@ -108,7 +114,58 @@ export const googleSync = async ({
     throw new Error(sourceData?.error?.message || "Failed to fetch source events");
   }
 
-  const sourceEvents = sourceData.items || [];
+  const sourceEvents = (sourceData.items || []).filter((event: any) => {
+    
+    const isAllDay = !!event.start?.date;
+    const isTimed = !!event.start?.dateTime;
+
+    if (isAllDay && !workflow.includeAllDayEvents) {
+      return false;
+    }
+
+    if (isTimed && !workflow.includeTimedEvents) {
+      return false;
+    }
+    
+
+    if (!isAllDay && event.transparency === "transparent" && !workflow.includeNonBusyEvents
+    ) {
+      return false;
+    }
+
+    if (
+      event.status === "tentative" &&
+      !workflow.includeTentativeEvents
+    ) {
+      return false;
+    }
+
+    const eventType = event.eventType || "default";
+
+    if (
+      eventType === "focusTime" &&
+      !workflow.includeFocusTimeEvents
+    ) {
+      return false;
+    }
+
+    if (
+      eventType === "outOfOffice" &&
+      !workflow.includeOutOfOfficeEvents
+    ) {
+      return false;
+    }
+
+    return true;
+});
+console.log("Filtered source events:",
+      sourceEvents.map((e: any)=> ({
+        summary: e.summary,
+        start: e.start,
+        end: e.end,
+        eventType: e.eventType,
+      }))
+    );
 
   const targetRes = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
@@ -127,7 +184,9 @@ export const googleSync = async ({
   const targetEvents = targetData.items || [];
 
   for (const event of sourceEvents) {
-    if (!event.start?.dateTime || !event.end?.dateTime) continue;
+    const start= event.start?.dateTime || event.start?.date;
+    const end = event.end?.dateTime || event.end?.date;
+    if (!start || !end) continue;
     if (!event.summary || event.summary === "Busy") continue;
     if (event.summary.toLowerCase().includes("birthday")) continue;
 
@@ -137,23 +196,41 @@ export const googleSync = async ({
     );
 
     if (!matchingBusy) {
-      await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events`, {
+      console.log(
+        "Creating target event:",
+        event.summary,
+        start,
+        end
+      );
+      const createRes= await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${validTargetAccessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          summary: "Busy",
+          summary: 
+            workflow.removeSummaryLocation
+               ? workflow.replacementSummary || "Busy"
+               : event.summary,
           visibility: "public",
           transparency: "opaque",
-          start: {
-            dateTime: event.start.dateTime,
+          start: event.start?.dateTime
+          ?  {
+            dateTime: start,
             timeZone: "Asia/Kolkata",
+          }
+          : {
+            date: start,
           },
-          end: {
-            dateTime: event.end.dateTime,
+
+          end: event.end?.dateTime
+          ? {
+            dateTime: end,
             timeZone: "Asia/Kolkata",
+          }
+          : {
+            date: end,
           },
           extendedProperties: {
             private: {
@@ -162,12 +239,21 @@ export const googleSync = async ({
           },
         }),
       });
+      const createData = await createRes.json();
+      console.log("Google create response:", createData);
+
+      if(!createRes.ok){
+        console.error(
+          "Failed creating event:",
+          createData
+        );
+      }
     } else {
       const sameTime =
-        matchingBusy.start?.dateTime === event.start.dateTime &&
-        matchingBusy.end?.dateTime === event.end.dateTime;
+        (matchingBusy.start?.dateTime || matchingBusy.start?.date) === start &&
+        (matchingBusy.end?.dateTime || matchingBusy.end?.date) === end;
 
-      if (!sameTime) {
+      if (!sameTime && !workflow.preserveManualChanges) {
         await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events/${matchingBusy.id}`,
           {
@@ -177,13 +263,21 @@ export const googleSync = async ({
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              start: {
-                dateTime: event.start.dateTime,
+              start: event.start?.dateTime
+              ? {
+                dateTime: start,
                 timeZone: "Asia/Kolkata",
+              }
+              : { 
+                date: start,
               },
-              end: {
-                dateTime: event.end.dateTime,
+              end: event.end?.dateTime
+              ? {
+                dateTime: end,
                 timeZone: "Asia/Kolkata",
+              }
+              : {
+                date: end,
               },
             }),
           }
@@ -212,7 +306,6 @@ export const googleSync = async ({
       );
     }
   }
-
   await prisma.workflow.update({
     where: { id: workflowId },
     data: {

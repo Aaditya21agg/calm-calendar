@@ -18,6 +18,18 @@ type Workflow = {
   targetGoogleAccount?: GoogleAccount;
   enabled: boolean;
   lastSyncedAt?: string | null;
+
+  includeTimedevents: boolean;
+  includeAllDayEvents: boolean;
+  includeNonBusyEvents: boolean;
+  includeTentativeEvents: boolean;
+  includeFocusTimeEvents: boolean;
+  includeOutOfOfficeevents: boolean;
+
+  removeSummaryLocation: boolean;
+  replacementSummary?: string | null;
+
+  preserveManualChanges: boolean;
 };
 
 export default function Dashboard() {
@@ -32,6 +44,17 @@ export default function Dashboard() {
   const [sourceCalendars, setSourceCalendars] = useState<any[]>([]);
   const [targetCalendars, setTargetCalendars] = useState<any[]>([]);
   const [statusMap, setStatusMap] = useState<{ [key: number]: string }>({});
+  const [includeTimedEvents, setIncludeTimedEvents] = useState(true);
+  const [includeAllDayEvents, setIncludeAllDayEvents] = useState(true);
+  const [includeNonBusyEvents, setIncludeNonBusyEvents] = useState(false);
+  const [includeTentativeEvents, setIncludeTentativeEvents] = useState(false);
+  const [includeFocusTimeEvents, setIncludeFocusTimeEvents] = useState(false);
+  const [includeOutOfOfficeEvents, setIncludeOutOfOfficeEvents] = useState(false);
+
+  const [removeSummaryLocation, setRemoveSummaryLocation] = useState(false);
+  const [replacementSummary, setReplacementSummary] = useState("");
+
+  const [preserveManualChanges, setPreserveManualChanges] = useState(false);
 
   const fetchWorkflows = async () => {
     const res = await fetch("/api/workflows");
@@ -76,6 +99,17 @@ export default function Dashboard() {
     setTargetCalendars([]);
     setEditingId(null);
     setShowForm(false);
+    setIncludeTimedEvents(true);
+    setIncludeAllDayEvents(true);
+    setIncludeNonBusyEvents(false);
+    setIncludeTentativeEvents(false);
+    setIncludeFocusTimeEvents(false);
+    setIncludeOutOfOfficeEvents(false);
+
+    setRemoveSummaryLocation(false);
+    setReplacementSummary("");
+
+    setPreserveManualChanges(false);
   };
 
   useEffect(() => {
@@ -103,6 +137,18 @@ export default function Dashboard() {
       targetGoogleAccountId: Number(targetGoogleAccountId),
       sourceCal,
       targetCal,
+
+      includeTimedEvents,
+      includeAllDayEvents,
+      includeNonBusyEvents,
+      includeTentativeEvents,
+      includeFocusTimeEvents,
+      includeOutOfOfficeEvents,
+
+      removeSummaryLocation,
+      replacementSummary,
+
+      preserveManualChanges,
     };
 
     if (editingId) {
@@ -163,7 +209,19 @@ export default function Dashboard() {
     await fetchCalendars(String(workflow.targetGoogleAccountId), setTargetCalendars);
     setSourceCal(workflow.sourceCal);
     setTargetCal(workflow.targetCal);
+    setIncludeFocusTimeEvents(workflow.includeFocusTimeEvents);
+    setIncludeAllDayEvents(workflow.includeAllDayEvents);
+    setIncludeNonBusyEvents(workflow.includeNonBusyEvents);
+    setIncludeTentativeEvents(workflow.includeTentativeEvents);
+    setIncludeFocusTimeEvents(workflow.includeFocusTimeEvents);
+    setIncludeOutOfOfficeEvents(workflow.includeOutOfOfficeevents);
+
+    setRemoveSummaryLocation(workflow.removeSummaryLocation);
+    setReplacementSummary(workflow.replacementSummary || "");
+
+    setPreserveManualChanges(workflow.preserveManualChanges);
     setShowForm(true);
+
   };
 
   return (
@@ -265,6 +323,98 @@ export default function Dashboard() {
                 ))}
               </select>
             </div>
+
+            <div className="border-t pt-3 mt-3">
+              <h4 className="font-medium mb-2">Event Filters</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={includeTimedEvents}
+                    onChange ={(e)=> setIncludeTimedEvents(e.target.checked)}
+                      />
+                      {" "}Timed Events
+                      </label>
+
+                       <label>
+                  <input
+                    type="checkbox"
+                    checked={includeAllDayEvents}
+                    onChange ={(e)=> setIncludeAllDayEvents(e.target.checked)}
+                      />
+                      {" "}All Day Events
+                      </label>
+
+                       <label>
+                  <input
+                    type="checkbox"
+                    checked={includeNonBusyEvents}
+                    onChange ={(e)=> setIncludeNonBusyEvents(e.target.checked)}
+                      />
+                      {" "}Non Busy Events
+                      </label>
+
+                       <label>
+                  <input
+                    type="checkbox"
+                    checked={includeTentativeEvents}
+                    onChange ={(e)=> setIncludeTentativeEvents(e.target.checked)}
+                      />
+                      {" "}Tentative Events
+                      </label>
+
+                       <label>
+                  <input
+                    type="checkbox"
+                    checked={includeFocusTimeEvents}
+                    onChange ={(e)=> setIncludeFocusTimeEvents(e.target.checked)}
+                      />
+                      {" "}Focus Time Events
+                      </label>
+
+                       <label>
+                  <input
+                    type="checkbox"
+                    checked={includeOutOfOfficeEvents}
+                    onChange ={(e)=> setIncludeOutOfOfficeEvents(e.target.checked)}
+                      />
+                      {" "}Out Of Office
+                      </label>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm">
+                          <input
+                           type="checkbox"
+                           checked={removeSummaryLocation}
+                           onChange={(e) => setRemoveSummaryLocation(e.target.checked)}
+                           />
+                           {" "}Replace Event Title
+                        </label>
+
+                        {removeSummaryLocation && (
+                          <input
+                            className="border rounded px-2 py-1 mt-2 w-full"
+                            value={replacementSummary}
+                            onChange={(e) => setReplacementSummary(e.target.value)}
+                            placeholder="Busy"
+                            />
+                        )}
+                        </div>
+
+                        <div className="mt-4">
+                          <label className="text-sm">
+                            <input
+                             type="checkbox"
+                             checked={preserveManualChanges}
+                             onChange={(e) => setPreserveManualChanges(e.target.checked)}
+                             />
+                             {" "}Preserve Manual Changes
+                          </label>
+                          </div>
+                          </div>                    
+                
 
             <div className="flex gap-2">
               <button
