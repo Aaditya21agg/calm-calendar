@@ -50,6 +50,7 @@ model Workflow{
 
   lastSynced DateTime?
   lastSyncedAt DateTime?
+  syncToken String?
   userId Int
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   sourceGoogleAccountId Int

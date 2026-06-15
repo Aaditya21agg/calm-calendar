@@ -92,6 +92,7 @@ async function googleSync({
     },
   });
   const sourceData = await sourceRes.json();
+  console.log("Google nextSyncToken:", sourceData.nextSyncToken);
 
   if (!sourceRes.ok) {
     throw new Error(sourceData?.error?.message || "Failed to fetch source events");

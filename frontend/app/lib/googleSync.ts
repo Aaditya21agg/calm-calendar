@@ -81,9 +81,7 @@ export const googleSync = async ({
   const workflow = await prisma.workflow.findUnique({
     where: {id: workflowId },
   });
-  if (!workflow) {
-    throw new Error("Workflow not found");
-  }
+  console.log(workflow);
 
   const validSourceAccessToken = await getValidAccessToken(
     sourceGoogleAccountId,
@@ -96,19 +94,21 @@ export const googleSync = async ({
     targetRefreshToken
   );
 
-  const now = new Date();
-  const nextMonth = new Date();
-  nextMonth.setMonth(now.getMonth() + 2);
-
-  const sourceRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${sourceCal}/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
-    {
-      headers: {
-        Authorization: `Bearer ${validSourceAccessToken}`,
-      },
-    }
-  );
+ let sourceUrl = `https://www.googleapis.com/calendar/v3/calendars/${sourceCal}/events?singleEvents=true`;
+ if (workflow.syncToken){
+  sourceUrl += `&syncToken=${encodeURIComponent(workflow.syncToken)}`;
+  console.log("running incremental sync using token:", workflow.syncToken);
+ } else {
+  console.log("running initial full sync");
+ }
+ const sourceRes = await fetch(sourceUrl, { 
+  headers: {
+    Authorization: `Bearer ${validSourceAccessToken}`,
+  },
+ })
   const sourceData = await sourceRes.json();
+  console.log("Google nextSyncToken:", sourceData.nextSyncToken);
+  console.log("Source event count:", sourceData.items?.length);
 
   if (!sourceRes.ok) {
     throw new Error(sourceData?.error?.message || "Failed to fetch source events");
@@ -166,6 +166,9 @@ console.log("Filtered source events:",
         eventType: e.eventType,
       }))
     );
+    const now = new Date();
+    const nextMonth = new Date();
+    nextMonth.setMonth(now.getMonth()+2);
 
   const targetRes = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
@@ -194,6 +197,8 @@ console.log("Filtered source events:",
     const matchingBusy = targetEvents.find(
       (e: any) => e.extendedProperties?.private?.sourceEventId === sourceEventId
     );
+    console.log("Processing event.summary");
+    console.log("Existing target match:", matchingBusy ? "YES" : "NO")
 
     if (!matchingBusy) {
       console.log(
@@ -240,6 +245,7 @@ console.log("Filtered source events:",
         }),
       });
       const createData = await createRes.json();
+      console.log("create status:", createRes.status)
       console.log("Google create response:", createData);
 
       if(!createRes.ok){
@@ -311,6 +317,7 @@ console.log("Filtered source events:",
     data: {
       lastSynced: new Date(),
       lastSyncedAt: new Date(),
+      syncToken: sourceData.nextSyncToken ?? workflow.syncToken,
     },
   });
 
