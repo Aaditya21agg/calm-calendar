@@ -94,7 +94,7 @@ export const googleSync = async ({
     targetRefreshToken
   );
 
- let sourceUrl = `https://www.googleapis.com/calendar/v3/calendars/${sourceCal}/events?singleEvents=true`;
+ let sourceUrl = `https://www.googleapis.com/calendar/v3/calendars/${sourceCal}/events?singleEvents=true&showDeleted=true`;
  if (workflow.syncToken){
   sourceUrl += `&syncToken=${encodeURIComponent(workflow.syncToken)}`;
   console.log("running incremental sync using token:", workflow.syncToken);
@@ -107,6 +107,7 @@ export const googleSync = async ({
   },
  })
   const sourceData = await sourceRes.json();
+  const changedEvents  = sourceData.items || [];
   console.log("Google nextSyncToken:", sourceData.nextSyncToken);
   console.log("Source event count:", sourceData.items?.length);
 
@@ -114,7 +115,10 @@ export const googleSync = async ({
     throw new Error(sourceData?.error?.message || "Failed to fetch source events");
   }
 
-  const sourceEvents = (sourceData.items || []).filter((event: any) => {
+  const sourceEvents = changedEvents.filter((event: any) => {
+    if (event.status === "cancelled"){
+      return false;
+    }
     
     const isAllDay = !!event.start?.date;
     const isTimed = !!event.start?.dateTime;
@@ -185,6 +189,30 @@ console.log("Filtered source events:",
   }
 
   const targetEvents = targetData.items || [];
+  
+  for (const event of changedEvents){
+    console.log("Changed event status:", event.id, event.status);
+    if(event.status!== "cancelled"){
+      continue;
+    }
+    console.log("Deleted source event detected:", event.id);
+    const sourceEventId = `${sourceGoogleAccountId}:${sourceCal}:${event.id}`;
+    const targetMatch = targetEvents.find((e: any) => e.extendedProperties?.private?.sourceEventId === sourceEventId);
+    if(!targetMatch){
+      continue;
+    }
+    await fetch(`https://www.googleapis.com/claendar/v3/calendars/${targetCal}/events/${targetMatch.id}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${validTargetAccessToken}`,
+        
+        },
+      }
+    );
+    console.log("Deleted target event:", targetMatch.id);
+  }
+
 
   for (const event of sourceEvents) {
     const start= event.start?.dateTime || event.start?.date;
@@ -258,8 +286,10 @@ console.log("Filtered source events:",
       const sameTime =
         (matchingBusy.start?.dateTime || matchingBusy.start?.date) === start &&
         (matchingBusy.end?.dateTime || matchingBusy.end?.date) === end;
+      console.log("sameTime:", sameTime, "preserveManualChanges", workflow.preserveManualChanges);
 
       if (!sameTime && !workflow.preserveManualChanges) {
+        
         await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events/${matchingBusy.id}`,
           {
@@ -291,7 +321,7 @@ console.log("Filtered source events:",
       }
     }
   }
-
+/*
   for (const busy of targetEvents) {
     const sourceEventId = busy.extendedProperties?.private?.sourceEventId;
     if (!sourceEventId?.startsWith(`${sourceGoogleAccountId}:${sourceCal}:`)) continue;
@@ -311,7 +341,7 @@ console.log("Filtered source events:",
         }
       );
     }
-  }
+  } */
   await prisma.workflow.update({
     where: { id: workflowId },
     data: {
