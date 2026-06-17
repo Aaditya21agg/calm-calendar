@@ -39,7 +39,7 @@ type GoogleSyncInput = {
   targetRefreshToken: string;
 };
 
-const getValidAccessToken = async (
+export const getValidAccessToken = async (
   googleAccountId: number,
   accessToken: string,
   refreshToken: string
