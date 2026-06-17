@@ -201,7 +201,7 @@ console.log("Filtered source events:",
     if(!targetMatch){
       continue;
     }
-    await fetch(`https://www.googleapis.com/claendar/v3/calendars/${targetCal}/events/${targetMatch.id}`,
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events/${targetMatch.id}`,
       {
         method: "DELETE",
         headers: {

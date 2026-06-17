@@ -10,12 +10,21 @@ export async function POST(req: Request){
     if( !resourceId || resourceState === "sync"){
         return new Response(null, {status: 200,});
     }
+    const channelId = req.headers.get("x-goog-channel-id");
+   
+    console.log("Channel ID:", channelId);
     const workflow = await prisma.workflow.findFirst({
         where: {watchResourceId: resourceId, },
     });
     if(!workflow){
         console.log("No workflow found for resource");
         return new Response(null, { status: 200,});
+    }
+     if (channelId !== workflow.watchChannelId){
+        console.log("Ignoring stale channel:", channelId);
+        return new Response(null, {
+            status: 200,
+        });
     }
     console.log("Matched workflow:", workflow.name);
     const sourceAccount = await prisma.googleAccount.findUnique({
@@ -38,4 +47,5 @@ export async function POST(req: Request){
         targetRefreshToken: targetAccount.refreshToken,
     });console.log("🔥 WEBHOOK googleSync FINISHED 🔥");
     return new Response(null, { status: 200,});
+    
 }
