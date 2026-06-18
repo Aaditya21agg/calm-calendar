@@ -36,8 +36,23 @@ export async function POST(req: Request){
     if(!sourceAccount || !targetAccount){
         return new Response(null, { status:200, });
     }
-    console.log("Running webhook sync:", workflow.name);
+    
+    
+    const lockedWorkflow = await prisma.workflow.findUnique({
+        where:{id: workflow.id,},
+
+    });
+    if(lockedWorkflow?.syncInProgress){
+        console.log("Sync already running..skipping.");
+        return new Response(null, { status:200});
+    }
+    await prisma.workflow.update({
+        where: {id: workflow.id },
+        data: { syncInProgress: true,},
+    });
     console.log("🔥 ABOUT TO RUN googleSync FROM WEBHOOK 🔥");
+    console.log("Running webhook sync:", workflow.name);
+    try{
     await googleSync({workflowId: workflow.id, sourceGoogleAccountId: sourceAccount.id, targetGoogleAccountId: targetAccount.id, 
         sourceCal: workflow.sourceCal,
         targetCal: workflow.targetCal,
@@ -45,7 +60,15 @@ export async function POST(req: Request){
         sourceRefreshToken: sourceAccount.refreshToken,
         targetAccessToken: targetAccount.accessToken,
         targetRefreshToken: targetAccount.refreshToken,
-    });console.log("🔥 WEBHOOK googleSync FINISHED 🔥");
-    return new Response(null, { status: 200,});
+    });}
     
-}
+    finally{
+        await prisma.workflow.update({
+            where: { id: workflow.id },
+            data: {syncInProgress: false,},
+        });
+        
+        console.log("🔥 WEBHOOK googleSync FINISHED 🔥");
+    return new Response(null, { status: 200,});
+    }
+    }

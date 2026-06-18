@@ -1,6 +1,6 @@
 import { prisma } from "@/app/lib/prisma";
 
-async function stopWatchChannel(channelId: string, resourceId: string, accessToken: string)
+export async function stopWatchChannel(channelId: string, resourceId: string, accessToken: string)
 {
     const res = await fetch("https://www.googleapis.com/calendar/v3/channels/stop",
         {
@@ -14,6 +14,7 @@ async function stopWatchChannel(channelId: string, resourceId: string, accessTok
             }),
         }
     );
+   
     const text = await res.text();
     console.log("Stopped old channel:", channelId, "Status:", res.status);
     console.log("Google stop response:", text);

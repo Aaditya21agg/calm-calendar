@@ -61,5 +61,6 @@ model Workflow{
 
   targetGoogleAccountId Int
   targetGoogleAccount GoogleAccount @relation("TargetGoogleAccount", fields: [targetGoogleAccountId], references: [id])
+  syncInProgress Boolean @default(false)
 
 }
