@@ -75,31 +75,63 @@ export const googleSync = async ({
   targetAccessToken,
   targetRefreshToken,
 }: GoogleSyncInput) => {
-  if (!sourceCal || !targetCal) {
-    throw new Error("Missing calendars");
-  }
+  
   const workflow = await prisma.workflow.findUnique({
     where: {id: workflowId },
+    include:{
+      sourceCalendars: {
+        include: {
+          googleAccount: true,
+        },
+      },
+      targetCalendars: {
+        include: {
+          googleAccount: true,
+        },
+      },
+    },
   });
+  
+  if (!workflow) {
+    throw new Error("Workflow not found");
+  }
+  if (
+    workflow.sourceCalendars.length === 0 || workflow.targetCalendars.length === 0
+  ){
+    throw new Error("Workflow has no source or target calendars");
+  }
+
+    console.log("SYNCING WORKFLOW ID:", workflow.id);
+    console.log("WORKFLOW NAME:", workflow.name);
+    const sourceConfigs = workflow.sourceCalendars;
+    const targetConfigs = workflow.targetCalendars;
+
+   
+    
+
+    console.log("Source count:", sourceConfigs.length);
+    console.log("Target count:", targetConfigs.length);
+  
+  console.log("SOURCE CONFIGS:", JSON.stringify(workflow?.sourceCalendars, null, 2));
+  console.log("TARGET CONFIGS:", JSON.stringify(workflow?.targetCalendars, null, 2));
   console.log(workflow);
+  console.log(JSON.stringify(workflow, null, 2))
+
+for (const sourceConfig of sourceConfigs) {
+  console.log("Syncing source calendar:", sourceConfig.calendarId);
+  
 
   const validSourceAccessToken = await getValidAccessToken(
-    sourceGoogleAccountId,
-    sourceAccessToken,
-    sourceRefreshToken
+    sourceConfig.googleAccountId,
+    sourceConfig.googleAccount.accessToken,
+    sourceConfig.googleAccount.refreshToken
   );
-  const validTargetAccessToken = await getValidAccessToken(
-    targetGoogleAccountId,
-    targetAccessToken,
-    targetRefreshToken
-  );
-
- let sourceUrl = `https://www.googleapis.com/calendar/v3/calendars/${sourceCal}/events?singleEvents=true&showDeleted=true`;
- if (workflow.syncToken){
-  sourceUrl += `&syncToken=${encodeURIComponent(workflow.syncToken)}`;
-  console.log("running incremental sync using token:", workflow.syncToken);
+  let sourceUrl = `https://www.googleapis.com/calendar/v3/calendars/${sourceConfig.calendarId}/events?singleEvents=true&showDeleted=true`;
+ if (sourceConfig.syncToken){
+  sourceUrl += `&syncToken=${encodeURIComponent(sourceConfig.syncToken)}`;
+  console.log("running incremental sync for ${sourceConfig.calendarId");
  } else {
-  console.log("running initial full sync");
+  console.log("running initial sync for ${sourceConfig.calendarId");
  }
  const sourceRes = await fetch(sourceUrl, { 
   headers: {
@@ -107,7 +139,7 @@ export const googleSync = async ({
   },
  })
   const sourceData = await sourceRes.json();
-  const changedEvents  = sourceData.items || [];
+  const changedEvents = sourceData.items || [];
   console.log("Google nextSyncToken:", sourceData.nextSyncToken);
   console.log("Source event count:", sourceData.items?.length);
 
@@ -162,6 +194,14 @@ export const googleSync = async ({
 
     return true;
 });
+  for (const targetConfig of targetConfigs){
+  const validTargetAccessToken = await getValidAccessToken(
+    targetConfig.googleAccountId,
+    targetConfig.googleAccount.accessToken,
+    targetConfig.googleAccount.refreshToken
+  );
+
+ 
 console.log("Filtered source events:",
       sourceEvents.map((e: any)=> ({
         summary: e.summary,
@@ -175,7 +215,7 @@ console.log("Filtered source events:",
     nextMonth.setMonth(now.getMonth()+2);
 
   const targetRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
+    `https://www.googleapis.com/calendar/v3/calendars/${targetConfig.calendarId}/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
     {
       headers: {
         Authorization: `Bearer ${validTargetAccessToken}`,
@@ -189,19 +229,19 @@ console.log("Filtered source events:",
   }
 
   const targetEvents = targetData.items || [];
-  
-  for (const event of changedEvents){
+  const cancelledEvents = changedEvents.filter((e: any)=> e.status === "cancelled");
+  for (const event of cancelledEvents){
     console.log("Changed event status:", event.id, event.status);
     if(event.status!== "cancelled"){
       continue;
     }
     console.log("Deleted source event detected:", event.id);
-    const sourceEventId = `${sourceGoogleAccountId}:${sourceCal}:${event.id}`;
+    const sourceEventId = `${sourceConfig.googleAccountId}:${sourceConfig.calendarId}:${event.id}`;
     const targetMatch = targetEvents.find((e: any) => e.extendedProperties?.private?.sourceEventId === sourceEventId);
     if(!targetMatch){
       continue;
     }
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events/${targetMatch.id}`,
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetConfig.calendarId}/events/${targetMatch.id}`,
       {
         method: "DELETE",
         headers: {
@@ -221,7 +261,7 @@ console.log("Filtered source events:",
     if (!event.summary || event.summary === "Busy") continue;
     if (event.summary.toLowerCase().includes("birthday")) continue;
 
-    const sourceEventId = `${sourceGoogleAccountId}:${sourceCal}:${event.id}`;
+    const sourceEventId = `${sourceConfig.googleAccountId}:${sourceConfig.calendarId}:${event.id}`;
     const matchingBusy = targetEvents.find(
       (e: any) => e.extendedProperties?.private?.sourceEventId === sourceEventId
     );
@@ -235,7 +275,7 @@ console.log("Filtered source events:",
         start,
         end
       );
-      const createRes= await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events`, {
+      const createRes= await fetch(`https://www.googleapis.com/calendar/v3/calendars/${targetConfig.calendarId}/events`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${validTargetAccessToken}`,
@@ -291,7 +331,7 @@ console.log("Filtered source events:",
       if (!sameTime && !workflow.preserveManualChanges) {
         
         await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${targetCal}/events/${matchingBusy.id}`,
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetConfig.calendarId)}/events/${matchingBusy.id}`,
           {
             method: "PATCH",
             headers: {
@@ -342,14 +382,23 @@ console.log("Filtered source events:",
       );
     }
   } */
-  await prisma.workflow.update({
-    where: { id: workflowId },
+  }
+  await prisma.workflowSourceCalendar.update({
+    where: { id: sourceConfig.id,
+
+     },
     data: {
-      lastSynced: new Date(),
-      lastSyncedAt: new Date(),
-      syncToken: sourceData.nextSyncToken ?? workflow.syncToken,
+      
+      syncToken: sourceData.nextSyncToken ?? sourceConfig.syncToken,
     },
   });
-
+}
+await prisma.workflow.update({
+  where: { id: workflowId},
+  data: {
+    lastSynced: new Date(),
+    lastSyncedAt: new Date(),
+  },
+});
   return "Sync completed!";
 };

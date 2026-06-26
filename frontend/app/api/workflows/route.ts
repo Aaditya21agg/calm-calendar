@@ -28,6 +28,17 @@ export async function GET() {
             targetGoogleAccount: {
                 select: { id: true, email: true },
             },
+            sourceCalendars: {
+                include: { googleAccount: { select: {id: true, email: true,
+
+                },
+            },
+        },
+            },
+            targetCalendars: { include: {googleAccount: {select: {id: true, email: true,},
+        },
+    },
+},
         },
     });
     return Response.json(workflows);
@@ -38,9 +49,12 @@ export async function POST(req: Request){
     try{
         const session = await getServerSession(authOptions);
         if(!session?.user?.email){
-        return Response.json( { error: "Not authenticated"}, { status: 401});
-    }
-
+            return Response.json(
+                { error: "Not authenticated" },
+                { status: 401}
+            );
+        }
+        
 const user = await prisma.user.findUnique({
     where: { email: session.user.email},
 });
@@ -48,34 +62,68 @@ const user = await prisma.user.findUnique({
         return Response.json({ error: "User not found" }, { status: 404 });
     }
     const body = await req.json();
-    const { name, sourceCal, targetCal, sourceGoogleAccountId, targetGoogleAccountId, includeTimedEvents, includeAllDayEvents, includeNonBusyEvents, includeTentativeEvents, includeFocusTimeEvents, includeOutOfOfficeEvents, removeSummaryLocation, replacementSummary, preserveManualChanges, } = body;
-    if (!sourceCal || !targetCal || !sourceGoogleAccountId || !targetGoogleAccountId) {
-        return Response.json({ error: "Missing workflow details" }, { status: 400 });
-    }
+    const {
+        name,
+        sourceCal,
+        targetCal,
+        sourceGoogleAccountId,
+        targetGoogleAccountId,
+        sourceCalendars,
+        targetCalendars,
+        includeTimedEvents,
+        includeAllDayEvents,
+        includeNonBusyEvents,
+        includeTentativeEvents,
+        includeFocusTimeEvents,
+        includeOutOfOfficeEvents,
+        removeSummaryLocation,
+        replacementSummary,
+        preserveManualChanges,
+    } = body;
+    console.log("POST BODY:");
+    console.log(JSON.stringify(body,null, 2));
 
-    const accountCount = await prisma.googleAccount.count({
-        where: {
-            userId: user.id,
-            id: {
-                in: [Number(sourceGoogleAccountId), Number(targetGoogleAccountId)],
+    console.log("SOURCE CALENDARS:", sourceCalendars);
+    console.log("TARGET CLAENDARS:", targetCalendars);
+const hasLegacyFields = sourceCal && targetCal && sourceGoogleAccountId && targetGoogleAccountId;
+        const hasNewFields = sourceCalendars?.length && targetCalendars?.length;
+        if(!hasLegacyFields && !hasNewFields){
+            return Response.json(
+                { error: "Missing workflow details"},
+                { status: 400}
+            );
+        }
+       /* const accountCount = await prisma.googleAccount.count({
+            where : {
+                userId: user.id,
+                id: {
+                    in: [
+                        Number(sourceGoogleAccountId),
+                        Number(targetGoogleAccountId),
+                    ],
+                },
             },
-        },
-    });
+        });*/
+    
+   
 
-    if (accountCount !== new Set([Number(sourceGoogleAccountId), Number(targetGoogleAccountId)]).size) {
+   /* if (accountCount !== new Set([Number(sourceGoogleAccountId), Number(targetGoogleAccountId)]).size) {
         return Response.json({ error: "Invalid Google account selection" }, { status: 400 });
-    }
+    }*/
 
     const workflow = await prisma.workflow.create({
         
         data:  {
             name: name || "Custom Workflow",
-            sourceCal,
-            targetCal,
+            // Temporary
+            sourceCal: sourceCalendars[0].calendarId,
+            targetCal: targetCalendars[0].calendarId,
+            sourceGoogleAccountId: sourceCalendars[0].googleAccountId,
+            targetGoogleAccountId: targetCalendars[0].googleAccountId,
             enabled: true,
             userId: user.id,
-            sourceGoogleAccountId: Number(sourceGoogleAccountId),
-            targetGoogleAccountId: Number(targetGoogleAccountId),
+
+
             includeTimedEvents:
             includeTimedEvents ?? true,
 
@@ -104,6 +152,28 @@ const user = await prisma.user.findUnique({
             preserveManualChanges ?? false,
         },
     });
+    if(sourceCalendars?.length){
+        await prisma.workflowSourceCalendar.createMany({
+            data: sourceCalendars.map(
+                (c: any) => ({
+                    workflowId: workflow.id,
+                    calendarId: c.calendarId,
+                    googleAccountId: c.googleAccountId,
+                })
+            ),
+        });
+    }
+    if(targetCalendars?.length){
+        await prisma.workflowTargetCalendar.createMany({
+            data: targetCalendars.map(
+                (c: any)=> ({
+                    workflowId: workflow.id,
+                    calendarId: c.calendarId,
+                    googleAccountId: c.googleAccountId,
+                })
+            ),
+        });
+    }
     return Response.json(workflow);
 } catch(err){
     console.error("POST error:", err);
@@ -128,6 +198,7 @@ const workflow = await prisma.workflow.findFirst({
         id: Number(id),
         user: {
             email: session.user.email,
+        
         },
     },
 });
@@ -201,15 +272,28 @@ export async function PATCH(req: Request){
     const updated = await prisma.workflow.update({
         where: {id: Number(id) },
         data: {
-            sourceCal: body.sourceCal,
-            targetCal: body.targetCal,
+            sourceCal: 
+                body.sourceCalendars?.[0]?.calendarId ??
+                body.sourceCal ??
+                workflow.sourceCal,
+            
+            targetCal:
+                body.targetCalendars?.[0]?.calendarId ??
+                body.targetCal ??
+                workflow.targetCal,
+
+            sourceGoogleAccountId:
+                body.sourceCalendars?.[0]?.googleAccountId ??
+                body.sourceGoogleAccountId ??
+                workflow.sourceGoogleAccountId,
+
+            targetGoogleAccountId:
+                body.targetCalendars?.[0]?.googleAccountId ??
+                body.targetGoogleAccountId ??
+                workflow.targetGoogleAccountId,
+
             enabled: body.enabled,
-            sourceGoogleAccountId: body.sourceGoogleAccountId
-                ? Number(body.sourceGoogleAccountId)
-                : undefined,
-            targetGoogleAccountId: body.targetGoogleAccountId
-                ? Number(body.targetGoogleAccountId)
-                : undefined,
+            
 
             includeTimedEvents: body.includeTimedEvents,
             includeAllDayEvents: body.includeAllDayEvents,
@@ -226,5 +310,28 @@ export async function PATCH(req: Request){
         },
 
     });
+    if (body.sourceCalendars) {
+        await prisma.workflowSourceCalendar.deleteMany({where: {workflowId: Number(id)},
+    });
+    await prisma.workflowSourceCalendar.createMany({data: body.sourceCalendars.map((c: any)=> ({
+        workflowId: Number(id),
+        googleAccountId: c.googleAccountId,
+        calendarId: c.calendarId,
+    })),
+});
+    }
+
+    if(body.targetCalendars) {
+        await prisma.workflowTargetCalendar.deleteMany({where: { workflowId: Number(id),},
+    });
+    await prisma.workflowTargetCalendar.createMany({
+        data: body.targetCalendars.map((c: any) => ({
+            workflowId: Number(id),
+            googleAccountId: c.googleAccountId,
+            calendarId: c.calendarId,
+        })),
+    });
+    }
+    
     return Response.json(updated);
 }

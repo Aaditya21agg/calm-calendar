@@ -20,6 +20,9 @@ model GoogleAccount {
   sourceWorkflows Workflow[] @relation("SourceGoogleAccount")
   targetWorkflows Workflow[] @relation("TargetGoogleAccount")
 
+  sourceCalendars WorkflowSourceCalendar[]
+  targetCalendars WorkflowTargetCalendar[]
+
   @@unique([userId, email])
 }
 generator client {
@@ -31,7 +34,8 @@ datasource db {
   
 }
 model Workflow{
-  id Int  @id @default(autoincrement())
+  id Int @id @default(autoincrement())
+  
   name String
   sourceCal String
   targetCal String
@@ -55,6 +59,8 @@ model Workflow{
   watchResourceId String?
   watchExpiration DateTime?
   userId Int
+  sourceCalendars WorkflowSourceCalendar[]
+  targetCalendars WorkflowTargetCalendar[]
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   sourceGoogleAccountId Int
   sourceGoogleAccount GoogleAccount @relation("SourceGoogleAccount", fields: [sourceGoogleAccountId], references: [id])
@@ -63,4 +69,38 @@ model Workflow{
   targetGoogleAccount GoogleAccount @relation("TargetGoogleAccount", fields: [targetGoogleAccountId], references: [id])
   syncInProgress Boolean @default(false)
 
+}
+model WorkflowSourceCalendar {
+  id Int @id @default(autoincrement())
+
+  workflowId Int
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  googleAccountId Int
+  googleAccount GoogleAccount @relation(fields: [googleAccountId], references: [id])
+
+  calendarId String
+
+  syncToken String?
+  watchChannelId String?
+  watchResourceId String?
+  watchExpiration DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model WorkflowTargetCalendar {
+  id Int @id @default(autoincrement())
+
+  workflowId Int
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  googleAccountId Int
+  googleAccount GoogleAccount @relation(fields: [googleAccountId], references: [id])
+
+  calendarId String
+
+  
+
+  createdAt DateTime @default(now())
 }

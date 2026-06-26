@@ -76,7 +76,7 @@ function Home({ user }: { user: User | null }) {
     </main>
   );
 }
-
+console.log("MULTI CALENDAR DASHBOARD LOADED");
 function Dashboard({ user }: { user: User | null }) {
   const [showForm, setShowForm] = useState(false);
   const [sourceGoogleAccountId, setSourceGoogleAccountId] = useState("");
@@ -106,14 +106,16 @@ function Dashboard({ user }: { user: User | null }) {
   async function fetchCalendars(
     accountId: string,
     setCalendars: (calendars: GoogleCalendar[]) => void
-  ) {
+  ): Promise<GoogleCalendar[]> {
     if (!accountId) {
       setCalendars([]);
       return;
     }
 
     const data = await apiFetch<GoogleCalendar[]>(`/api/google/calendars?accountId=${accountId}`);
-    setCalendars(Array.isArray(data) ? data : []);
+    const calendars = Array.isArray(data) ? data : [];
+    setCalendars(calendars);
+    return calendars;
   }
 
   function resetForm() {
@@ -123,6 +125,7 @@ function Dashboard({ user }: { user: User | null }) {
     setTargetCal("");
     setSourceCalendars([]);
     setTargetCalendars([]);
+    
     setEditingId(null);
     setShowForm(false);
     setError("");
@@ -152,6 +155,10 @@ function Dashboard({ user }: { user: User | null }) {
       setError("Please select both Gmail accounts and both calendars.");
       return;
     }
+    console.log("SELECTED SOURCES");
+    console.log(selectedSources);
+    console.log("SELECTED TARGETS");
+    console.log(selectedTargets);
 
     const payload = {
       name: "Custom Workflow",
@@ -196,10 +203,54 @@ function Dashboard({ user }: { user: User | null }) {
     setEditingId(workflow.id);
     setSourceGoogleAccountId(String(workflow.sourceGoogleAccountId));
     setTargetGoogleAccountId(String(workflow.targetGoogleAccountId));
-    await fetchCalendars(String(workflow.sourceGoogleAccountId), setSourceCalendars);
-    await fetchCalendars(String(workflow.targetGoogleAccountId), setTargetCalendars);
-    setSourceCal(workflow.sourceCal);
-    setTargetCal(workflow.targetCal);
+    const sourceList = await fetchCalendars(String(workflow.sourceGoogleAccountId),setSourceCalendars);
+    const targetList = await fetchCalendars(String(workflow.targetGoogleAccountId),setTargetCalendars);
+    setSelectedSources(
+      workflow.sourceCalendars.map((c)=> ({
+        googleAccountId: c.googleAccountId,
+        googleEmail: c.googleAccount?.email,
+        calendarId: c.calendarId,
+        calendarName: sourceList.find((cal)=> cal.id === c.calendarId)?.summary ??
+        c.calendarId,
+      }))
+    );
+
+    console.log(
+  "Mapped Sources:",
+  workflow.sourceCalendars.map((c) => ({
+    googleAccountId: c.googleAccountId,
+    googleEmail: c.googleAccount?.email,
+    calendarId: c.calendarId,
+    calendarName:
+      sourceList.find((cal) => cal.id === c.calendarId)?.summary ??
+      c.calendarId,
+  }))
+);
+    setSelectedTargets(
+      workflow.targetCalendars.map((c)=> ({
+        googleAccountId: c.googleAccountId,
+        googleEmail: c.googleAccount?.email,
+        calendarId: c.calendarId,
+        calendarName: targetList.find((cal) => cal.id === c.calendarId)?.summary ??
+        c.calendarId,
+      }))
+    );
+    console.log(
+  "Mapped Targets:",
+  workflow.targetCalendars.map((c) => ({
+    googleAccountId: c.googleAccountId,
+    googleEmail: c.googleAccount?.email,
+    calendarId: c.calendarId,
+    calendarName:
+      targetList.find((cal) => cal.id === c.calendarId)?.summary ??
+      c.calendarId,
+  }))
+);
+
+
+alert(
+  `Sources: ${workflow.sourceCalendars.length}, Targets: ${workflow.targetCalendars.length}`
+);
     setShowForm(true);
   }
 

@@ -6,7 +6,12 @@ type GoogleAccount = {
   id: number;
   email: string;
 };
-
+type WorkflowCalendar = {
+  id: number;
+  googleAccountId: number;
+  calendarId: string;
+  googleAccount?: GoogleAccount;
+};
 type Workflow = {
   id: number;
   name: string;
@@ -16,15 +21,17 @@ type Workflow = {
   targetGoogleAccountId: number;
   sourceGoogleAccount?: GoogleAccount;
   targetGoogleAccount?: GoogleAccount;
+  sourceCalendars: WorkflowCalendar[];
+  targetCalendars: WorkflowCalendar[];
   enabled: boolean;
   lastSyncedAt?: string | null;
 
-  includeTimedevents: boolean;
+  includeTimedEvents: boolean;
   includeAllDayEvents: boolean;
   includeNonBusyEvents: boolean;
   includeTentativeEvents: boolean;
   includeFocusTimeEvents: boolean;
-  includeOutOfOfficeevents: boolean;
+  includeOutOfOfficeEvents: boolean;
 
   removeSummaryLocation: boolean;
   replacementSummary?: string | null;
@@ -43,6 +50,8 @@ export default function Dashboard() {
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   const [sourceCalendars, setSourceCalendars] = useState<any[]>([]);
   const [targetCalendars, setTargetCalendars] = useState<any[]>([]);
+  const [selectedSources, setSelectedSources] = useState<any[]>([]);
+  const [selectedTargets, setSelectedTargets] = useState<any[]>([]);
   const [statusMap, setStatusMap] = useState<{ [key: number]: string }>({});
   const [includeTimedEvents, setIncludeTimedEvents] = useState(true);
   const [includeAllDayEvents, setIncludeAllDayEvents] = useState(true);
@@ -74,7 +83,7 @@ export default function Dashboard() {
   ) => {
     if (!accountId) {
       setCalendars([]);
-      return;
+      return [];
     }
 
     const res = await fetch(`/api/google/calendars?accountId=${accountId}`);
@@ -87,7 +96,9 @@ export default function Dashboard() {
       return;
     }
       const data = await res.json();
-    setCalendars(Array.isArray(data) ? data : []);
+      const calendars = Array.isArray(data) ? data : [];
+    setCalendars(calendars);
+    return calendars;
   };
 
   const resetForm = () => {
@@ -97,6 +108,8 @@ export default function Dashboard() {
     setTargetCal("");
     setSourceCalendars([]);
     setTargetCalendars([]);
+    setSelectedSources([]);
+    setSelectedTargets([]);
     setEditingId(null);
     setShowForm(false);
     setIncludeTimedEvents(true);
@@ -125,18 +138,71 @@ export default function Dashboard() {
     fetchCalendars(targetGoogleAccountId, setTargetCalendars);
   }, [targetGoogleAccountId]);
 
+  const addSourceCalendar = () => {
+    if (!sourceGoogleAccountId || !sourceCal){
+      alert("Select source Gmail and calendar");
+      return;
+    }
+    const account = accounts.find(
+      (a) => a.id == Number(sourceGoogleAccountId)
+    );
+    const calendar = sourceCalendars.find(
+      (c) => c.id == sourceCal
+    );
+    if (!account || !calendar) return;
+    setSelectedSources((prev)=> [
+      ...prev,
+      {
+        googleAccountId: Number(sourceGoogleAccountId),
+        googleEmail: account.email,
+        calendarId: sourceCal,
+        calendarName: calendar.summary,
+      },
+    ]);
+    setSourceCal("");
+  };
+  const addTargetCalendar = () => {
+    if(!targetGoogleAccountId || !targetCal){
+      alert("Select target Gmail and calendar");
+      return;
+    }
+    const account = accounts.find(
+      (a) => a.id === Number(targetGoogleAccountId)
+    );
+    const calendar = targetCalendars.find(
+      (c) => c.id === targetCal
+    );
+    if(!account || !calendar) return;
+    setSelectedTargets((prev)=> [
+      ...prev,
+      {
+        googleAccountId: Number(targetGoogleAccountId),
+        googleEmail: account.email,
+        calendarId: targetCal,
+        calendarName: calendar.summary,
+      }
+
+    ]
+    );
+    setTargetCal("");
+  };
+
   const saveWorkflow = async () => {
-    if (!sourceGoogleAccountId || !targetGoogleAccountId || !sourceCal || !targetCal) {
-      alert("Please select both Gmail accounts and both calendars");
+    if (selectedSources.length === 0 || selectedTargets.length === 0){
+      alert("Add at least one source and one target calendar");
       return;
     }
 
     const payload = {
       name: "Custom Workflow",
-      sourceGoogleAccountId: Number(sourceGoogleAccountId),
-      targetGoogleAccountId: Number(targetGoogleAccountId),
-      sourceCal,
-      targetCal,
+      sourceCalendars: selectedSources.map((s)=>({
+        googleAccountId: s.googleAccountId,
+        calendarId: s.calendarId,
+      })),
+      targetCalendars: selectedTargets.map((t)=> ({
+        googleAccountId: t.googleAccountId,
+        calendarId: t.calendarId,
+      })),
 
       includeTimedEvents,
       includeAllDayEvents,
@@ -202,19 +268,51 @@ export default function Dashboard() {
   };
 
   const editWorkflow = async (workflow: Workflow) => {
+    console.log("EDIT WORKFLOW");
+    console.log(workflow);
+    console.log("SOURCE CALENDARS:", workflow.sourceCalendars);
+    console.log("TARGET CALENDARS:", workflow.targetCalendars);
     setEditingId(workflow.id);
     setSourceGoogleAccountId(String(workflow.sourceGoogleAccountId));
     setTargetGoogleAccountId(String(workflow.targetGoogleAccountId));
-    await fetchCalendars(String(workflow.sourceGoogleAccountId), setSourceCalendars);
-    await fetchCalendars(String(workflow.targetGoogleAccountId), setTargetCalendars);
+    const sourceList = await fetchCalendars(
+  String(workflow.sourceGoogleAccountId),
+  setSourceCalendars
+);
+
+const targetList = await fetchCalendars(
+  String(workflow.targetGoogleAccountId),
+  setTargetCalendars
+);
+setSelectedSources(
+  workflow.sourceCalendars.map((c) => ({
+    googleAccountId: c.googleAccountId,
+    googleEmail: c.googleAccount?.email,
+    calendarId: c.calendarId,
+    calendarName:
+      sourceList.find((cal: any) => cal.id === c.calendarId)?.summary ??
+      c.calendarId,
+  }))
+);
+
+setSelectedTargets(
+  workflow.targetCalendars.map((c) => ({
+    googleAccountId: c.googleAccountId,
+    googleEmail: c.googleAccount?.email,
+    calendarId: c.calendarId,
+    calendarName:
+      targetList.find((cal: any) => cal.id === c.calendarId)?.summary ??
+      c.calendarId,
+  }))
+);
     setSourceCal(workflow.sourceCal);
     setTargetCal(workflow.targetCal);
     setIncludeFocusTimeEvents(workflow.includeFocusTimeEvents);
     setIncludeAllDayEvents(workflow.includeAllDayEvents);
     setIncludeNonBusyEvents(workflow.includeNonBusyEvents);
     setIncludeTentativeEvents(workflow.includeTentativeEvents);
-    setIncludeFocusTimeEvents(workflow.includeFocusTimeEvents);
-    setIncludeOutOfOfficeEvents(workflow.includeOutOfOfficeevents);
+    setIncludeTimedEvents(workflow.includeTimedEvents);
+    setIncludeOutOfOfficeEvents(workflow.includeOutOfOfficeEvents);
 
     setRemoveSummaryLocation(workflow.removeSummaryLocation);
     setReplacementSummary(workflow.replacementSummary || "");
@@ -271,6 +369,7 @@ export default function Dashboard() {
                 onChange={(e) => {
                   setSourceGoogleAccountId(e.target.value);
                   setSourceCal("");
+                  setSelectedSources([]);
                 }}
               >
                 <option value="">Source Gmail</option>
@@ -287,6 +386,7 @@ export default function Dashboard() {
                 onChange={(e) => {
                   setTargetGoogleAccountId(e.target.value);
                   setTargetCal("");
+                  setSelectedTargets([]);
                 }}
               >
                 <option value="">Target Gmail</option>
@@ -309,6 +409,12 @@ export default function Dashboard() {
                   </option>
                 ))}
               </select>
+              <button 
+                type="button"
+                onClick={addSourceCalendar}
+                className="bg-green-500 text-white px-2 py-1 rounded">
+                  Add Source
+                </button>
 
               <select
                 className="border px-2 py-1 rounded text-sm"
@@ -321,8 +427,31 @@ export default function Dashboard() {
                     {cal.summary}
                   </option>
                 ))}
+                
               </select>
+              <button 
+                type="button"
+                onClick={addTargetCalendar}
+                className="bg-blue-500 text-white px-2 py-1 rounded">
+                  Add Target
+                </button>
+              <div className="mt-4">
+                <h4 className="font-medium">Selected Sources</h4>
+                {selectedSources.map((s,idx)=>(
+                  <div key={idx}>
+                    {s.googleEmail} → {s.calendarName}
+                    </div>
+                ))}
             </div>
+            <div className="mt-4">
+              <h4 className="font-medium"> Selected Targets</h4>
+              {selectedTargets.map((t, idx)=> (
+                <div key={idx}>
+                  {t.googleEmail}→{t.calendarName}
+                  </div>
+              ))}
+              </div>
+              </div>
 
             <div className="border-t pt-3 mt-3">
               <h4 className="font-medium mb-2">Event Filters</h4>
