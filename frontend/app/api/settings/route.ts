@@ -17,7 +17,7 @@ export async function GET(){
     const latestSync = workflows
     .map(w => w.lastSyncedAt)
     .filter(Boolean)
-    .sort((a, b) => new Date(b!) - new Date(a!))[0];
+    .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0];
 
     return Response.json({
         trialEndsAt: user?.trialEndsAt,
