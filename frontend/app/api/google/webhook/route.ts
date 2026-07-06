@@ -1,7 +1,7 @@
 
 import { googleSync } from "@/app/lib/googleSync";
 import { prisma } from "@/app/lib/prisma"
-console.log("🔥 ABOUT TO RUN googleSync FROM WEBHOOK 🔥");
+
 export async function POST(req: Request){
     
     const resourceId = req.headers.get("x-goog-resource-id");

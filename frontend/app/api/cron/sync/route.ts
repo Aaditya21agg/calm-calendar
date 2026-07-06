@@ -1,5 +1,9 @@
-import { prisma } from "@/app/lib/prisma";
+/*import { prisma } from "@/app/lib/prisma";
 import { googleSync } from "@/app/lib/googleSync";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
  export async function GET(){
     try{
         console.log("Cron started...");
@@ -40,4 +44,13 @@ import { googleSync } from "@/app/lib/googleSync";
         console.error("Cron error:", err);
         return Response.json({ error: "Cron failed"}, { status: 500 });
     }
- }
+ }*/
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  return Response.json({
+    message: "Cron route is alive",
+  });
+}
