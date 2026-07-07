@@ -1,4 +1,4 @@
-import { startCron } from "@/app/lib/cron";
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -19,9 +19,8 @@ export const metadata: Metadata = {
   title: "Calm Calendar Clone",
   description: "Built by Aaditya",
 };
-if(typeof window=="undefined"){
-  startCron();
-}
+
+
 export default function RootLayout({
   children,
 }: {
