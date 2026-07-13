@@ -67,7 +67,11 @@ export default function Dashboard() {
 
   const fetchWorkflows = async () => {
     const res = await fetch("/api/workflows");
+    if(!res.ok){
+      throw new Error(`/api/workflows returned ${res.status}`);
+    }
     const data = await res.json();
+    console.log("Fetched workflows:", data);
     setWorkFlows(Array.isArray(data) ? data : []);
   };
 
@@ -76,6 +80,38 @@ export default function Dashboard() {
     const data = await res.json();
     setAccounts(Array.isArray(data) ? data : []);
   };
+
+  const [deletingAccountId, setDeletingAccountId] = useState<number | null>(null);
+  const deleteGoogleAccount = async (accountId: number) => {
+    const confirmed = window.confirm("Are you sure you want to remove this Google account?");
+    if(!confirmed) return;
+    try{
+      setDeletingAccountId(accountId);
+    
+    const res = await fetch(`/api/google/accounts/delete?id=${accountId}`, {
+      method: "DELETE",
+    });
+    const data = await res.json();
+    if(!res.ok){
+      let message = data.error;
+      if(data.workflow?.length){
+        message +="\n\nUsed by:\n"+data.workflows.map((w: any)=> `• ${w.name}`).join("\n" );
+      }
+      alert(message);
+      return;
+    }
+    alert("Google account removed successfully.");
+    await fetchAccounts();
+    //await fetchCalendars();
+    // refresh workflows because dropdowns depend on accounts
+    await fetchWorkflows();
+
+  } catch(err){
+    console.error(err);
+    alert("Something went wrong while deleting the account.");
+  }finally{
+    setDeletingAccountId(null);
+  }};
 
   const fetchCalendars = async (
     accountId: string,
@@ -150,6 +186,17 @@ export default function Dashboard() {
       (c) => c.id == sourceCal
     );
     if (!account || !calendar) return;
+
+    // Prevent duplicate source calendars
+    if(
+      selectedSources.some(
+        (s)=>
+          s.calendarUd === sourceCal && s.googleAccoutId === Number(sourceGoogleAccountId)
+      )
+    ){
+      alert("This source calendar has already been added");
+      return;
+    }
     setSelectedSources((prev)=> [
       ...prev,
       {
@@ -160,6 +207,12 @@ export default function Dashboard() {
       },
     ]);
     setSourceCal("");
+  };
+  const removeSourceCalendar =(index:number)=> {
+    setSelectedSources((prev)=>prev.filter((_,i)=> i !== index));
+  };
+  const removeTargetCalendar = (index: number)=> {
+    setSelectedTargets((prev)=> prev.filter((_,i)=> i !== index));
   };
   const addTargetCalendar = () => {
     if(!targetGoogleAccountId || !targetCal){
@@ -173,6 +226,15 @@ export default function Dashboard() {
       (c) => c.id === targetCal
     );
     if(!account || !calendar) return;
+    if(
+      selectedTargets.some(
+        (t)=> 
+          t.calendarId === targetCal && t.googleAccountId === Number(targetGoogleAccountId)
+      )
+    ){
+      alert("This target calendar has already been added");
+      return;
+    }
     setSelectedTargets((prev)=> [
       ...prev,
       {
@@ -355,6 +417,37 @@ setSelectedTargets(
             </button>
           </div>
         </div>
+        <div className="bg-gray-50 border rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-medium">Connected Google Accounts</h3>
+            <span className="text-sm text-gray-500">
+              {accounts.length} connected
+            </span>
+          </div>
+          {accounts.length === 0 ?(
+            <p className="test-gray-500 text-sm">
+              No Google accounts connected.
+            </p>
+          ): (
+            <div className="space-y-2">
+              {accounts.map((account)=>(
+                <div 
+                key={account.id}
+                className="flex items-center justify-between border bg-white rounded-lg px-4 py-3">
+                  <div> 
+                    <p className="font-medium">{account.email}</p>
+                    </div>
+                    <button
+                    onClick={()=> deleteGoogleAccount(account.id)}
+                    disabled={deletingAccountId == account.id}
+                    className="px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 disabled:bg-gray-100 disabled:text-gray-400 transition text-sm">
+                      {deletingAccountId === account.id  ? "Removing...": "Remove"}
+                    </button>
+                    </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {showForm && (
           <div className="border border-gray-200 p-4 rounded-lg mb-4 bg-gray-50">
@@ -438,16 +531,41 @@ setSelectedTargets(
               <div className="mt-4">
                 <h4 className="font-medium">Selected Sources</h4>
                 {selectedSources.map((s,idx)=>(
-                  <div key={idx}>
-                    {s.googleEmail} → {s.calendarName}
+                  <div 
+                  key={idx}
+                  className="flex items-center justify-between border rounded-lg px-3 py-2 mb-2 bg-white">
+                    <div>
+                      <div className="font-medium">{s.calendarName}</div>
+                      <div className="text-xs text-gray-500">
+                        {s.googleEmail}
+                    </div>
+                    </div>
+                    <button
+                    type="button"
+                    onClick={()=> removeSourceCalendar(idx)}
+                    className="px-3 py-1 rounded-md bg-red text-red-600 hover:bg-red-100 text-sm">
+                      Remove
+                    </button>
                     </div>
                 ))}
             </div>
             <div className="mt-4">
               <h4 className="font-medium"> Selected Targets</h4>
               {selectedTargets.map((t, idx)=> (
-                <div key={idx}>
-                  {t.googleEmail}→{t.calendarName}
+                <div key={idx}
+                className="flex items-center justify-between border rounded-lg px-3 py-2 mb-2 bg-white">
+                  <div>
+                    <div className="font-medium">{t.calendarName}</div>
+                    <div className="text-xs text-gray-500">
+                      {t.googleEmail}
+                  </div>
+                  </div>
+                  <button
+                  type="button"
+                  onClick={()=> removeTargetCalendar(idx)}
+                  className="px-3 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 text-sm">
+                    Remove
+                  </button>
                   </div>
               ))}
               </div>

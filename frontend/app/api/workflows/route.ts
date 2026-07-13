@@ -1,7 +1,8 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { prisma } from "@/app/lib/prisma";
-
+import { stopAllworkflowMatches, createWatchChannel } from "@/app/lib/googleWatch";
+import { getValidAccessToken } from "@/app/lib/googleSync";
 
 
 
@@ -163,6 +164,22 @@ const hasLegacyFields = sourceCal && targetCal && sourceGoogleAccountId && targe
             ),
         });
     }
+    const createdSources = await prisma.workflowSourceCalendar.findMany({
+        where: {
+            workflowId: workflow.id,
+        },
+        include: {
+            googleAccount: true,
+        },
+    });
+    for (const source of createdSources){
+        const accessToken = await getValidAccessToken(
+            source.googleAccount.id, source.googleAccount.accessToken, source.googleAccount.refreshToken
+        );
+        await createWatchChannel(
+            workflow.id, accessToken, source.calendarId
+        );
+    }
     if(targetCalendars?.length){
         await prisma.workflowTargetCalendar.createMany({
             data: targetCalendars.map(
@@ -205,10 +222,9 @@ const workflow = await prisma.workflow.findFirst({
 if (!workflow) {
     return Response.json({ error: "Workflow not found" }, { status: 404 });
 }
+await stopAllworkflowMatches(Number(id));
 await prisma.workflow.delete({
-    where: {
-        id: Number(id),
-    },
+    where: {id: Number(id),},
 });
 return Response.json({message: "Deleted successfully"});
 } catch(err){
@@ -311,6 +327,8 @@ export async function PATCH(req: Request){
 
     });
     if (body.sourceCalendars) {
+        // Stop all existing Google watches first
+        await stopAllworkflowMatches(Number(id));
         await prisma.workflowSourceCalendar.deleteMany({where: {workflowId: Number(id)},
     });
     await prisma.workflowSourceCalendar.createMany({data: body.sourceCalendars.map((c: any)=> ({
@@ -319,6 +337,24 @@ export async function PATCH(req: Request){
         calendarId: c.calendarId,
     })),
 });
+
+for (const source of body.sourceCalendars){
+    const account = await prisma.googleAccount.findUnique({
+        where: {
+            id: source.googleAccountId,
+        },
+    });
+    if(!account){
+        continue;
+    }
+    const accessToken = await getValidAccessToken(
+        account.id, account.accessToken, account.refreshToken
+    );
+    await createWatchChannel(
+        Number(id), accessToken, source.calendarId
+    );
+}
+
     }
 
     if(body.targetCalendars) {

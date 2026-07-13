@@ -13,14 +13,25 @@ export async function POST(req: Request){
     const channelId = req.headers.get("x-goog-channel-id");
    
     console.log("Channel ID:", channelId);
-    const workflow = await prisma.workflow.findFirst({
-        where: {watchResourceId: resourceId, },
+    const sourceCalendar = await prisma.workflowSourceCalendar.findFirst({
+        where: {
+            watchResourceId: resourceId,
+        },
     });
-    if(!workflow){
-        console.log("No workflow found for resource");
+    if(!sourceCalendar){
+        console.log("No source calendar found for resource");
         return new Response(null, { status: 200,});
     }
-     if (channelId !== workflow.watchChannelId){
+    const workflow = await prisma.workflow.findUnique({
+        where: {
+            id: sourceCalendar.workflowId,
+        },
+    });
+    if(!workflow){
+        console.log("Workflow not found");
+        return new Response(null, { status: 200});
+    }
+     if (channelId !== sourceCalendar.watchChannelId){
         console.log("Ignoring stale channel:", channelId);
         return new Response(null, {
             status: 200,
