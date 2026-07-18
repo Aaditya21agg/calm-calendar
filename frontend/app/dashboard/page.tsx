@@ -175,6 +175,7 @@ export default function Dashboard() {
   }, [targetGoogleAccountId]);
 
   const addSourceCalendar = () => {
+    alert("addSourceCalendar called");
     if (!sourceGoogleAccountId || !sourceCal){
       alert("Select source Gmail and calendar");
       return;
@@ -191,13 +192,14 @@ export default function Dashboard() {
     if(
       selectedSources.some(
         (s)=>
-          s.calendarUd === sourceCal && s.googleAccoutId === Number(sourceGoogleAccountId)
+          s.calendarId === sourceCal && s.googleAccountId === Number(sourceGoogleAccountId)
       )
     ){
       alert("This source calendar has already been added");
       return;
     }
-    setSelectedSources((prev)=> [
+    setSelectedSources((prev)=> {
+      const updated =[
       ...prev,
       {
         googleAccountId: Number(sourceGoogleAccountId),
@@ -205,7 +207,9 @@ export default function Dashboard() {
         calendarId: sourceCal,
         calendarName: calendar.summary,
       },
-    ]);
+    ]
+  console.log("UPDATED SOURCES:", updated)
+return updated;});
     setSourceCal("");
   };
   const removeSourceCalendar =(index:number)=> {
@@ -288,13 +292,18 @@ export default function Dashboard() {
         body: JSON.stringify(payload),
       });
     } else {
-      await fetch("/api/workflows", {
+      const workflowRes = await fetch("/api/workflows", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
+      if(!workflowRes.ok){
+        throw new Error("Failed to create workflow");
+      }
+      const workflow = await workflowRes.json();
+    
     }
 
     await fetchWorkflows();
@@ -383,6 +392,8 @@ setSelectedTargets(
     setShowForm(true);
 
   };
+  console.log("selectedSources:", selectedSources);
+  console.log("selectedTargets:", selectedTargets);
 
   return (
     <div className="mb-6">
@@ -462,7 +473,6 @@ setSelectedTargets(
                 onChange={(e) => {
                   setSourceGoogleAccountId(e.target.value);
                   setSourceCal("");
-                  setSelectedSources([]);
                 }}
               >
                 <option value="">Source Gmail</option>
@@ -479,7 +489,7 @@ setSelectedTargets(
                 onChange={(e) => {
                   setTargetGoogleAccountId(e.target.value);
                   setTargetCal("");
-                  setSelectedTargets([]);
+                
                 }}
               >
                 <option value="">Target Gmail</option>
@@ -529,7 +539,7 @@ setSelectedTargets(
                   Add Target
                 </button>
               <div className="mt-4">
-                <h4 className="font-medium">Selected Sources</h4>
+                <h4 className="font-medium">Selected Sources Test 123</h4>
                 {selectedSources.map((s,idx)=>(
                   <div 
                   key={idx}

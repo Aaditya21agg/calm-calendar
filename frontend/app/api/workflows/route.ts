@@ -235,6 +235,7 @@ return Response.json({message: "Deleted successfully"});
 // UPDATE
 export async function PATCH(req: Request){
     const session = await getServerSession(authOptions);
+    console.log("PATCH SESSION:", session);
     if(!session?.user?.email){
         return Response.json( { error: "Not authenticated"}, { status: 401});
     }
